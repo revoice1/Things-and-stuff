@@ -8,7 +8,7 @@ Function Invoke-GPOScopeAudit {
     )
 
     Write-Verbose "Collecting all GPO info"
-    $AllGPOs = Get-GPO -All
+    $AllGPOs = Get-GPO -All | Sort-Object -Property DisplayName
 
     $GPONotLinked = @()
     $GPOClean = @()
