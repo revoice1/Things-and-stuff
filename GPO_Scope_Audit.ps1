@@ -1,4 +1,4 @@
-Function Invoke-GPOSettingCheck {
+Function Invoke-GPOScopeAudit {
     [cmdletbinding()]
     param(
         [ValidateSet("Screen", "File")]
@@ -111,7 +111,7 @@ Function Invoke-GPOSettingCheck {
             $report
         }
         if ($OutputPreference -contains "File") {
-            $OutputPath = "$Filepath\GPO_Autit_Report.log"
+            $OutputPath = "$Filepath\GPO_Scope_Audit.log"
             Write-Verbose "Outputting Report to $($OutputPath)"
 
             $report | Out-File $OutputPath
@@ -119,4 +119,4 @@ Function Invoke-GPOSettingCheck {
     }
 }
 
-Invoke-GPOSettingCheck -OutputPreference Screen, File
+Invoke-GPOScopeAudit -OutputPreference Screen, File -Verbose
