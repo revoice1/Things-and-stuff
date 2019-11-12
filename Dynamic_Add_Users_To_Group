@@ -1,0 +1,101 @@
+$Group1 = "Name of a Group To Add Users to"
+$Group1Users = Get-ADUser -SearchBase "OU=Example OU" -SearchScope OneLevel -Filter * -Properties MemberOf
+
+$Group2 = "Name of a Group To Add All Users to"
+$Group2Users =  Get-ADUser -Filter * 
+
+$Group3 = "You can keep creating group and user var pairs and it will dynamically scale"
+$Group3Users = Get-ADUser -ldapfilter "(&(WhyAreYouReading=This))"
+
+# Test mode, assuming all setting functions support "whatif"...be careful
+$WhatIfPreference = $true
+
+function Add-UsersToGroup {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$GroupName,
+        [Parameter(Mandatory = $true)]
+        $Users
+    )
+
+    # If the userdata is not the result of a Get-ADUser call...let them know
+    if ($users[0].GetType().name -ne "ADUser") {
+        return Write-Error "Users passed for group $($GroupName) are not the result of a 'Get-ADUser' call"
+    }
+
+    # Chunk size for adding large chunks of users to an AD group, 10,000 is "safe"
+    $ChunkSize = 10000
+
+    # Try to find the group, as we need the DN, if we can't find it throw and error
+    try {
+        $GroupObj = Get-ADGroup $GroupName
+    }
+    catch {
+        return Write-Error "Declared Group Does Not Exist: $GroupName"
+    }
+
+    # If the MemberOf property  is not present in the data, educate the user and grab the data
+    if ($Users[0].psobject.properties.name -notcontains "MemberOf") {
+        Write-Warning "The 'MemberOf' property was not included in the dataset, re-collecting user data."
+        try {
+            $Users = $Users | Get-ADUser -Properties MemberOf    
+        }
+        catch {
+            return Write-Error "Error re-collecting user data, please add '-Properties MemberOf' to you get-aduser call"            
+        }
+    }
+
+    # Filter the target users to only those who aren't currently in the target group
+    $AccountsToAdd = $Users | Where-Object { $_.MemberOf -notcontains $GroupObj.distinguishedname }
+
+    # If there are users to add
+    if ($AccountsToAdd) {
+        # Count the users for easy comparison
+        $AccountsToAddCount = @($AccountsToAdd).count
+
+        # If we are under the chunk limit, just add all the users
+        if ($AccountsToAddCount -lt $ChunkSize) {
+            if ($PSCmdlet.ShouldProcess("Send E-mail: $RecipientEmail, $NotificationSubject")) {
+                Add-ADGroupMember -Identity $ServiceAccountGroup -Members $ServiceAccountUsers
+            }
+        }
+        # Else chunk the users up into addable chunks
+        else {
+            # Start at 0
+            $ChunkStart = 0
+        
+            # Limit the chunks to the chunk limit, and add to group
+            # i.e. Chunk start + ChunkSize - 1 (to compensate for the starting record) should equal the chunk size
+            do {
+                $ChunkUsers = $AccountsToAdd[$ChunkStart..$($ChunkStart + $ChunkSize - 1)]
+                if ($PSCmdlet.ShouldProcess("Send E-mail: $RecipientEmail, $NotificationSubject")) {
+                    Add-ADGroupMember -Identity $ServiceAccountGroup -Members $ChunkUsers
+                }
+                $ChunkStart += $ChunkSize
+            }
+            # Do this until the chunk start index is greater than the number of users to add
+            until($ChunkStart -gt $AccountsToAddCount)
+        }
+    }
+}
+
+
+# Get all the declared group vars
+$GroupVars = Get-Variable | ? { $_.name -match "Group\d+$" }
+
+foreach ($GroupVar in $GroupVars) {
+    $GroupVarName = $GroupVar.Name
+    $GroupName = $GroupVar.Value
+    
+    try {
+        $MatchingUsersVar = Get-Variable "$($GroupVarName)Users"
+        $MatchingUsers = $MatchingUsersVar.Value
+    }
+    catch {
+        Write-Output "No Matching Users Found for $($GroupVarName): $($GroupName)"
+        continue
+    }
+    
+    Add-UsersToGroup -GroupName $GroupName -Users $MatchingUsers -WhatIf
+}
