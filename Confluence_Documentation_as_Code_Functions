@@ -1,0 +1,119 @@
+function ConvertTo-BasicAuthHeader {
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    $Base64Creds = [System.Convert]::ToBase64String(
+        [System.Text.Encoding]::UTF8.GetBytes(
+            "$($Credential.UserName):$($Credential.GetNetworkCredential().password)"
+        )
+    )
+
+    $AuthHeader = @{
+        Authorization = "Basic $Base64Creds"
+    }
+    
+    return $AuthHeader
+}
+
+function Get-ConfluencePageContent {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PageID,
+        [Parameter(Mandatory = $true)]
+        [string]$ConfluenceServerName,
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
+
+    $PageAPIURL = "https://$($ConfluenceServerName)/rest/api/content/$($PageID)"
+    $PageBodyStorageAPIURL = "$($PageAPIURL)?expand=body.storage,version"
+
+    $GetPageDataSplat = @{
+        Method          = "GET"
+        UseBasicParsing = $True
+        URI             = $PageBodyStorageAPIURL
+        Headers         = $AuthHeader
+        ContentType     = 'application/json'
+    }
+
+    try {
+        Invoke-RestMethod @GetPageDataSplat  
+    }
+    catch {
+        throw $_.Exception
+    }
+}
+
+function Publish-PSTableToConfluence {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$PageID,
+        [Parameter(Mandatory = $true)]
+        [string]$ConfluenceServerName,
+        [Parameter(Mandatory = $true)]
+        $PSTable,
+        [System.Management.Automation.PSCredential]
+        $Credential,
+        [string]$SectionHeader,
+        [switch]$IncludeFooter
+    )
+    
+    $PSTableAsHTML = ($PSTable | ConvertTo-Html -Fragment) -join ""
+
+    $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential -ErrorAction Stop
+    $PageContentBodyStorageValue = $PageContent.body.storage.value
+
+    if ($IncludeFooter) {
+        $FooterData = "<br /><i>Content Updated by Automation $(Get-Date)</i>"
+        $PSTableAsHTML = $PSTableAsHTML + $FooterData
+    }
+
+    if ($SectionHeader) {
+        $NewBody = $PageContentBodyStorageValue -replace "($($SectionHeader).+?)(<table.+?<\/table>)", "`$1 $PSTableAsHTML"
+    }
+    else {
+        $NewBody = $PSTableAsHTML
+    }
+    
+    $PageAPIURL = "https://$($ConfluenceServerName)/rest/api/content/$($PageID)"
+    $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
+
+    $RequestBody = @{
+        version = @{
+            number = $PageContent.version.number + 1
+        }
+        title   = $PageContent.title
+        type    = $PageContent.type
+        body    = @{
+            storage = @{
+                value          = $NewBody
+                representation = "storage"
+            }
+        }
+    } | ConvertTo-Json
+
+    $UpdatePageSplat = @{
+        Method          = "PUT"
+        UseBasicParsing = $True
+        URI             = $PageAPIURL
+        Headers         = $AuthHeader
+        Body            = $RequestBody
+        ContentType     = 'application/json'
+    }
+    
+    if ($PSCmdlet.ShouldProcess("$($PageContent.title)", "Update Content")) {
+        try {
+            Invoke-RestMethod @UpdatePageSplat
+        }
+        catch {
+            $_.Exception
+        }
+    }
+    
+}
