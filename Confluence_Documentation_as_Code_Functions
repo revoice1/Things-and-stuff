@@ -1,33 +1,3 @@
-function ConvertTo-BasicAuthHeader {
-    <#
-    .SYNOPSIS
-        Helper function to intake a PS Credential and output a basicauth header for REST endpoints.
-        Use caution in storing this data, the credential returned is not encrypted it is only encoded.
-        Suggested use of this function is only to be used with other functions to limit the amount of time the encoded data is stored in memory.
-    .PARAMETER Credential
-        PS Credential input
-    .EXAMPLE
-        $Credential = Get-Credential
-        $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
-    #>
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.Management.Automation.PSCredential]$Credential
-    )
-
-    $Base64Creds = [System.Convert]::ToBase64String(
-        [System.Text.Encoding]::UTF8.GetBytes(
-            "$($Credential.UserName):$($Credential.GetNetworkCredential().password)"
-        )
-    )
-
-    $AuthHeader = @{
-        Authorization = "Basic $Base64Creds"
-    }
-
-    return $AuthHeader
-}
-
 function Get-ConfluencePageContent {
     <#
     .SYNOPSIS
@@ -72,6 +42,7 @@ function Get-ConfluencePageContent {
         Invoke-RestMethod @GetPageDataSplat
     }
     catch {
+        $_.Exception
         throw Get-WebRequestFailureData
     }
 }
@@ -91,8 +62,18 @@ function Publish-PSTableToConfluence {
     .Parameter SectionHeader
         Optional parameter to define a section header you would like to search for in the page content and replace the first table it finds under that header.
         If you do not specify a section header, the entire page will be replaced with the PSTable content
+        
+        Warning: If there is no table found in the section defined the next table found will be replaced, even if that table is in a further section.
+        Please make sure a table is defined in the section requested to avoid any false positives
     .Parameter IncludeFooter
         Optional parameter to include a foot note with the timestamp of the last automated update
+    .Parameter CustomFooterText
+        Optional parameter to be used in conjunction with the IncludeFooter switch.
+        You can define custom text string as the footer data
+        If not specified the default is "Content Updated by Automation"
+    .Parameter CustomFooterText
+        Optional parameter to bypass the content check.
+        If used the page will be updated regardless if the content is the same
     .EXAMPLE
         $PageID = "123454567"
         $ConfluenceServerName = "confluence.server.name"
@@ -113,18 +94,35 @@ function Publish-PSTableToConfluence {
         [System.Management.Automation.PSCredential]
         $Credential,
         [string]$SectionHeader,
-        [switch]$IncludeFooter
+        [switch]$IncludeFooter,
+        [string]$CustomFooterText,
+        [switch]$Force
     )
-    
+
     $PSTableAsHTML = ($PSTable | ConvertTo-Html -Fragment) -join ""
 
     $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential -ErrorAction Stop
     $PageContentBodyStorageValue = $PageContent.body.storage.value
 
-    $FooterText = "Content Updated by Automation"
+    $PSTableAsHTMLNoTags = $PSTableAsHTML -replace "(<.*?>)", ''
+    $PageContentBodyStorageValueNoTags = $PageContentBodyStorageValue -replace "(<.*?>)", ''
+
+    if ((!$Force) -and ($PageContentBodyStorageValueNoTags -match $PSTableAsHTMLNoTags)) {
+        return Write-Output "Page:`"$($PageContent.title)`" is already up to date, no publishing necessary."
+    }
+
+    if ($CustomFooterText) {
+        $FooterText = $CustomFooterText
+    }
+    else {
+        $FooterText = "Content Updated by Automation"    
+    }
+    
 
     if ($IncludeFooter) {
-        $FooterData = "<p><sub><em>$FooterText $(Get-Date)</em></sub></p>"
+        $FooterData = "<p><sub><em>"
+        $footerData += "$FooterText $(Get-Date)"
+        $FooterData += "</em></sub></p>"
         $PSTableAsHTML = $PSTableAsHTML + $FooterData
     }
 
@@ -191,13 +189,43 @@ function Get-WebRequestFailureData {
     # If it's not json data, throw the raw data
     try {
         if ($responseBody -match "(\{[^{}]+\})") {
-            throw $responseBody | ConvertFrom-Json | Format-List
+            return $responseBody | ConvertFrom-Json | Format-List
         }
         else {
-            throw $responseBody.ToString()
+            return $responseBody.ToString()
         }
     }
     catch {
-        $responseBody
+        return $responseBody
     }
+}
+
+function ConvertTo-BasicAuthHeader {
+    <#
+    .SYNOPSIS
+        Helper function to intake a PS Credential and output a basicauth header for REST endpoints.
+        Use caution in storing this data, the credential returned is not encrypted it is only encoded.
+        Suggested use of this function is only to be used with other functions to limit the amount of time the encoded data is stored in memory.
+    .PARAMETER Credential
+        PS Credential input
+    .EXAMPLE
+        $Credential = Get-Credential
+        $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [System.Management.Automation.PSCredential]$Credential
+    )
+
+    $Base64Creds = [System.Convert]::ToBase64String(
+        [System.Text.Encoding]::UTF8.GetBytes(
+            "$($Credential.UserName):$($Credential.GetNetworkCredential().password)"
+        )
+    )
+
+    $AuthHeader = @{
+        Authorization = "Basic $Base64Creds"
+    }
+
+    return $AuthHeader
 }
