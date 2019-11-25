@@ -39,8 +39,8 @@ function Get-ConfluencePageContent {
     .Parameter Credential
         PS Credential object used to authenticate to confluence
     .EXAMPLE
-        $PageID = "127833417"
-        $ConfluenceServerName = "confluence.internal.salesforce.com"
+        $PageID = "12345678"
+        $ConfluenceServerName = "confluence.server.name"
         $ConfluenceCreds = $(Get-Credential)
 
         $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential
@@ -94,8 +94,8 @@ function Publish-PSTableToConfluence {
     .Parameter IncludeFooter
         Optional parameter to include a foot note with the timestamp of the last automated update
     .EXAMPLE
-        $PageID = "127833417"
-        $ConfluenceServerName = "confluence.internal.salesforce.com"
+        $PageID = "12345678"
+        $ConfluenceServerName = "confluence.server.name"
         $ConfluenceCreds = $(Get-Credential)
 
         $DomainControllerInfo = Get-ADDomainController -Filter * | Select-Object Name, Site, OperatingSystem, IsGlobalCatalog, IsReadOnly, IPv4Address, @{Name = "FSMO Roles"; Expression = { if ( $_.OperationMasterRoles.count -eq 5) { "All" } else { $_.OperationMasterRoles } } } | Sort-Object -Property Name
