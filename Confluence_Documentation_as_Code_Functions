@@ -1,4 +1,15 @@
 function ConvertTo-BasicAuthHeader {
+    <#
+    .SYNOPSIS
+        Helper function to intake a PS Credential and output a basicauth header for REST endpoints.
+        Use caution in storing this data, the credential returned is not encrypted it is only encoded.
+        Suggested use of this function is only to be used with other functions to limit the amount of time the encoded data is stored in memory.
+    .PARAMETER Credential
+        PS Credential input
+    .EXAMPLE
+        $Credential = Get-Credential
+        $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
+    #>
     param(
         [Parameter(Mandatory = $true)]
         [System.Management.Automation.PSCredential]$Credential
@@ -13,11 +24,27 @@ function ConvertTo-BasicAuthHeader {
     $AuthHeader = @{
         Authorization = "Basic $Base64Creds"
     }
-    
+
     return $AuthHeader
 }
 
 function Get-ConfluencePageContent {
+    <#
+    .SYNOPSIS
+        Get the raw content (basically HTML) of a confluence page via the API
+    .Parameter PageID
+        The ID of the confluence page, you can get this from edit view or "view source" url
+    .Parameter ConfluenceServerName
+        The hostname of your confluence server, FQDN for best results
+    .Parameter Credential
+        PS Credential object used to authenticate to confluence
+    .EXAMPLE
+        $PageID = "127833417"
+        $ConfluenceServerName = "confluence.internal.salesforce.com"
+        $ConfluenceCreds = $(Get-Credential)
+
+        $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential
+    #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -42,7 +69,7 @@ function Get-ConfluencePageContent {
     }
 
     try {
-        Invoke-RestMethod @GetPageDataSplat  
+        Invoke-RestMethod @GetPageDataSplat
     }
     catch {
         throw $_.Exception
@@ -50,6 +77,31 @@ function Get-ConfluencePageContent {
 }
 
 function Publish-PSTableToConfluence {
+    <#
+    .SYNOPSIS
+        Get the raw content (basically HTML) of a confluence page via the API
+    .Parameter PageID
+        The ID of the confluence page, you can get this from edit view or "view source" url
+    .Parameter ConfluenceServerName
+        The hostname of your confluence server, FQDN for best results
+    .Parameter Credential
+        PS Credential object used to authenticate to confluence
+    .Parameter PSTable
+        Some sort of powershell table-like object as an input. Can be an array or a [pscustomobject]
+    .Parameter SectionHeader
+        Optional parameter to define a section header you would like to search for in the page content and replace the first table it finds under that header.
+        If you do not specify a section header, the entire page will be replaced with the PSTable content
+    .Parameter IncludeFooter
+        Optional parameter to include a foot note with the timestamp of the last automated update
+    .EXAMPLE
+        $PageID = "127833417"
+        $ConfluenceServerName = "confluence.internal.salesforce.com"
+        $ConfluenceCreds = $(Get-Credential)
+
+        $DomainControllerInfo = Get-ADDomainController -Filter * | Select-Object Name, Site, OperatingSystem, IsGlobalCatalog, IsReadOnly, IPv4Address, @{Name = "FSMO Roles"; Expression = { if ( $_.OperationMasterRoles.count -eq 5) { "All" } else { $_.OperationMasterRoles } } } | Sort-Object -Property Name
+
+        Publish-PSTableToConfluence -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $ConfluenceCreds -PSTable $DomainControllerInfo -IncludeFooter -SectionHeader "Prod Domain Controller List"
+    #>
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory = $true)]
@@ -63,7 +115,7 @@ function Publish-PSTableToConfluence {
         [string]$SectionHeader,
         [switch]$IncludeFooter
     )
-    
+
     $PSTableAsHTML = ($PSTable | ConvertTo-Html -Fragment) -join ""
 
     $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential -ErrorAction Stop
@@ -80,7 +132,7 @@ function Publish-PSTableToConfluence {
     else {
         $NewBody = $PSTableAsHTML
     }
-    
+
     $PageAPIURL = "https://$($ConfluenceServerName)/rest/api/content/$($PageID)"
     $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
 
@@ -106,7 +158,7 @@ function Publish-PSTableToConfluence {
         Body            = $RequestBody
         ContentType     = 'application/json'
     }
-    
+
     if ($PSCmdlet.ShouldProcess("$($PageContent.title)", "Update Content")) {
         try {
             Invoke-RestMethod @UpdatePageSplat
@@ -115,5 +167,5 @@ function Publish-PSTableToConfluence {
             $_.Exception
         }
     }
-    
+
 }
