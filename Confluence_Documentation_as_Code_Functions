@@ -71,7 +71,7 @@ function Publish-PSTableToConfluence {
         Optional parameter to be used in conjunction with the IncludeFooter switch.
         You can define custom text string as the footer data
         If not specified the default is "Content Updated by Automation"
-    .Parameter CustomFooterText
+    .Parameter Force
         Optional parameter to bypass the content check.
         If used the page will be updated regardless if the content is the same
     .EXAMPLE
