@@ -39,7 +39,7 @@ function Get-ConfluencePageContent {
     .Parameter Credential
         PS Credential object used to authenticate to confluence
     .EXAMPLE
-        $PageID = "12345678"
+        $PageID = "123454567"
         $ConfluenceServerName = "confluence.server.name"
         $ConfluenceCreds = $(Get-Credential)
 
@@ -72,7 +72,7 @@ function Get-ConfluencePageContent {
         Invoke-RestMethod @GetPageDataSplat
     }
     catch {
-        throw $_.Exception
+        throw Get-WebRequestFailureData
     }
 }
 
@@ -94,7 +94,7 @@ function Publish-PSTableToConfluence {
     .Parameter IncludeFooter
         Optional parameter to include a foot note with the timestamp of the last automated update
     .EXAMPLE
-        $PageID = "12345678"
+        $PageID = "123454567"
         $ConfluenceServerName = "confluence.server.name"
         $ConfluenceCreds = $(Get-Credential)
 
@@ -115,19 +115,21 @@ function Publish-PSTableToConfluence {
         [string]$SectionHeader,
         [switch]$IncludeFooter
     )
-
+    
     $PSTableAsHTML = ($PSTable | ConvertTo-Html -Fragment) -join ""
 
     $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential -ErrorAction Stop
     $PageContentBodyStorageValue = $PageContent.body.storage.value
 
+    $FooterText = "Content Updated by Automation"
+
     if ($IncludeFooter) {
-        $FooterData = "<br /><i>Content Updated by Automation $(Get-Date)</i>"
+        $FooterData = "<p><sub><em>$FooterText $(Get-Date)</em></sub></p>"
         $PSTableAsHTML = $PSTableAsHTML + $FooterData
     }
 
     if ($SectionHeader) {
-        $NewBody = $PageContentBodyStorageValue -replace "($($SectionHeader).+?)(<table.+?<\/table>)", "`$1 $PSTableAsHTML"
+        $NewBody = $PageContentBodyStorageValue -replace "($($SectionHeader).+?)(<table.+?<\/table>(.*?$($FooterText).*?<\/em><\/sub><\/p>)?)", "`$1 $PSTableAsHTML"
     }
     else {
         $NewBody = $PSTableAsHTML
@@ -165,7 +167,37 @@ function Publish-PSTableToConfluence {
         }
         catch {
             $_.Exception
+            throw Get-WebRequestFailureData
         }
     }
 
+}
+
+function Get-WebRequestFailureData {
+    <#
+    .SYNOPSIS
+    Helper function to get the web request error data
+    #>
+
+    # Isolate the web request response stream bits
+    $result = $_.Exception.Response.GetResponseStream()
+    # Read the data stream
+    $reader = New-Object System.IO.StreamReader($result)
+    # Move the read head to position 0 for playback
+    $reader.BaseStream.Position = 0
+    # Store the response in a var
+    $responseBody = $reader.ReadToEnd();
+    # Try to convert the response data from json
+    # If it's not json data, throw the raw data
+    try {
+        if ($responseBody -match "(\{[^{}]+\})") {
+            throw $responseBody | ConvertFrom-Json | Format-List
+        }
+        else {
+            throw $responseBody.ToString()
+        }
+    }
+    catch {
+        $responseBody
+    }
 }
