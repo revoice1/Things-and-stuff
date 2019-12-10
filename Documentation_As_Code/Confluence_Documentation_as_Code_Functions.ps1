@@ -121,7 +121,7 @@ function Publish-PSTableToConfluence {
 
     if ($IncludeFooter) {
         $FooterData = "<p><sub><em>"
-        $footerData += "$FooterText $(Get-Date)"
+        $footerData += "$FooterText $(Get-Date) $((Get-TimeZone).id)"
         $FooterData += "</em></sub></p>"
         $PSTableAsHTML = $PSTableAsHTML + $FooterData
     }
