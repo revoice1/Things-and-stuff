@@ -104,10 +104,10 @@ function Publish-PSTableToConfluence {
     $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential -ErrorAction Stop
     $PageContentBodyStorageValue = $PageContent.body.storage.value
 
-    $PSTableAsHTMLNoTags = $PSTableAsHTML -replace "(<.*?>)", ''
-    $PageContentBodyStorageValueNoTags = $PageContentBodyStorageValue -replace "(<.*?>)", ''
+    $PSTableAsHTMLNoTagsEscaped = $PSTableAsHTML -replace "(<.*?>)" -replace "\\|\^|\$|\.|\||\?|\*|\+|\(|\)|\[|\]|\{|\}|\/", "\`$&"
+    $PageContentBodyStorageValueNoTags = $PageContentBodyStorageValue -replace "(<.*?>)"
 
-    if ((!$Force) -and ($PageContentBodyStorageValueNoTags -match $PSTableAsHTMLNoTags)) {
+    if ((!$Force) -and ($PageContentBodyStorageValueNoTags -match $PSTableAsHTMLNoTagsEscaped)) {
         return Write-Output "Page:`"$($PageContent.title)`" is already up to date, no publishing necessary."
     }
 
