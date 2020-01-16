@@ -1,8 +1,3 @@
-<#
-Script designed to run as a scheduled task and e-mail about Active directory domain controller replication issues.
-The system the script runs on requires network level access to poll the domain controllers
->#
-
 Write-Host "Script Start: $(Get-Date)" -ForegroundColor DarkMagenta
 
 $ReplicationThreshold = 60 # Threshold in minutes for detecting "Last Replication Success" Issues
@@ -14,6 +9,8 @@ $CacheFilePath = "$(Split-Path $MyInvocation.MyCommand.Path -Parent)\AD_Replicat
 $CachePresent = Test-Path $CacheFilePath
 # Default mode to send alerts, unless otherwise prevented by logic.
 $SendAlert = $true
+# AD Domain
+$ADDomainName = (Get-ADDomain).NetBIOSName
 
 # Dev Switches
 $DevMode = $false # Only e-mail specific user, make false for production
@@ -24,19 +21,18 @@ $ForceClean = $false # EVERYTHING IS FIXED!!! takes precidence over ForceIssues,
 # Dev Comments = ###, remove for prod
 
 # SMTP Parameters
-### Fill in required data here
 $MailSplat = @{
-    To         = ""
-    SmtpServer = ""
+    To         = "recipient@domain.com","recipient2@domail.com"
+    SmtpServer = "mailrelay.domain.com"
     Body       = ""
     BodyAsHtml = $true
-    From       = ""
-    Subject    = "AD Replication Issues"
+    From       = "ADAlerts@domain.com"
+    Subject    = "AD Replication Issues: $ADDomainName"
 }
 
 if ($DevMode) {
     Write-Host "Dev Mode on, only sending mail to you" -ForegroundColor Green
-    $MailSplat.to = "" ### Developer e-mail goes here
+    $MailSplat.to = "you@domain.com"
 }
 
 $NonConnectable = @()
@@ -51,9 +47,9 @@ if (!$DontRefreshData) {
     # For each DC, try to ping then gather the replication data
     foreach ($DC in $AllDCs) {
         "Collecting data from $($DC.Name)"
-        $ConnectionTest = Test-Connection $DC -Quiet
+        $ConnectionTest = Test-NetConnection $DC -Port 9389
 
-        if ($ConnectionTest) {
+        if ($ConnectionTest.TcpTestSucceeded) {
             $ADReplicationData = Get-ADReplicationPartnerMetadata -Target $DC.name -Partition *
             $AllReplicationData += $ADReplicationData
         }
@@ -175,7 +171,7 @@ if ($NonConnectable -or $ConsecutiveFailures -or $ReplicationResult -or $LastRep
     }
 
     $MailSplat.Body += "<h3> Monitoring E-mail Logic: <br> </h3>"
-    $MailSplat.Body += "If issues are persistent, alerts will be sent once $($CacheTimeoutThreshold) minutes.<br>"
+    $MailSplat.Body += "If issues are persistent, alerts will be sent once every $($CacheTimeoutThreshold) minutes.<br>"
     $MailSplat.Body += "If issues change, an update will be sent, at max, once per 15 minutes.<br>"
     $MailSplat.Body += "If issues clear, an all-clear e-mail will be sent.<br>"
 
@@ -232,7 +228,7 @@ else {
         Write-Host "Clearing Cache" -ForegroundColor Green
         # Send Message if cache exists and no current issues found
         $MailSplat.Body = "All issues cleared"
-        $MailSplat.Subject = "AD Replication Issues - Cleared"
+        $MailSplat.Subject = "AD Replication Issues - Cleared: $ADDomainName"
 
         Send-MailMessage @MailSplat
 
