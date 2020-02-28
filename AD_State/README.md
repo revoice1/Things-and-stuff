@@ -1,10 +1,8 @@
 # M&A AD Report
 
 - [M&A AD Report](#ma-ad-report)
-  - [Overview](#overview)
   - [Requirements](#requirements)
   - [Usage](#usage)
-  - [Changelog](#changelog)
 
 ## Requirements
 
