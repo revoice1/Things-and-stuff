@@ -1,6 +1,6 @@
-# M&A AD Report
+# AD State Report
 
-- [M&A AD Report](#ma-ad-report)
+- [AD State Report](#ad-state-report)
   - [Requirements](#requirements)
   - [Usage](#usage)
 
