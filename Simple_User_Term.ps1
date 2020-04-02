@@ -156,7 +156,8 @@ foreach ($UserToTerm in $UsersToTerm) {
         try {
             $ErrorActionPreference = "Stop"
             if ($PSCmdlet.ShouldProcess("Disable Google Account: $($ADUserObj.mail)")) {
-                $command = &$GamEXE update user $($ADUserObj.mail) suspended on
+                $command = &$GamEXE update user $($ADUserObj.mail) password "$($RandomPassword)" suspended on gal off 
+                $command2 = &$GamEXE user $($ADUserObj.mail) delete groups
             }
             $ErrorActionPreference = "Continue"
         }
