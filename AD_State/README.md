@@ -1,8 +1,14 @@
 # AD State Report
 
 - [AD State Report](#ad-state-report)
+  - [Overview](#overview)
   - [Requirements](#requirements)
   - [Usage](#usage)
+  - [Changelog](#changelog)
+
+## Overview
+
+This script is intended to collect the basic stats from an AD domain for the purposes of informing a second round of targeted discovery
 
 ## Requirements
 
@@ -22,5 +28,6 @@
 2. Run the "M&A Report.ps1" file with powershell
    - On a machine that meets the requirements above
    - With an account that meets the requirements above
-3. An html copy of the report will be placed in the folder you are running the script from "(Domain NetBIOS name)_ad_report.html"
+3. An html copy of the report will be placed in "c:\temp\(Domain NetBIOS name)_ad_report.html"
 
+## Changelog
