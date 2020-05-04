@@ -1,5 +1,5 @@
-$InputFile = "G:\temp\LoginHistory.csv"
-$OutputFile = "G:\temp\LoginHistory_Unique.csv"
+$InputFile = "G:\temp\LoginHistory1588364791509.csv"
+$OutputFile = "G:\temp\LoginHistory1588364791509_Unique.csv"
 
 # How many rows should progress be printed
 $ShowCountEvery = 1000
@@ -23,8 +23,15 @@ foreach($row in [System.IO.File]::ReadLines($InputFile)){
     
     # Grab the header row for processing data and export later
     if($n -eq 0){
-        $csvHeader = $row
         $arrHeader = $row -split ","
+        
+        if($IncludeOrExclude -eq "Include"){ 
+            $csvHeader = ($arrHeader | Where-Object {$DataForReport -contains $_}) -join ","
+        }
+        else{
+            $csvHeader = ($arrHeader | Where-Object {$DataForReport -notcontains $_}) -join ","
+        }
+
         $n++
         continue
     }
@@ -58,10 +65,7 @@ foreach($row in [System.IO.File]::ReadLines($InputFile)){
     
     #region normalization
     # Do any data normalization here
-    
-    # Example to normalize some user agent string data
-    # This would remove version info e.g. turns "Chrome 81" to "Chrome"
-    # Since we are deduping on browser, this will be critical for proper dedupe
+
     $psObjRow.Browser = switch -Wildcard ($psObjRow.Browser){
         "*Chrome*" {"Chrome"}
         "*Edge*" {"Edge"}
