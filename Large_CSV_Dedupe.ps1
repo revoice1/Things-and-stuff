@@ -3,11 +3,10 @@ $OutputFile = "G:\temp\LoginHistory1588364791509_Unique.csv"
 
 # How many rows should progress be printed
 $ShowCountEvery = 1000
-# Unit of time between progress intervals
-$DeltaUnit = "Seconds"
-$DedupeOn = "Username", "Browser", "Platform"
 
-# Include or exclude the data headers in the $DataForReport array from your ouput file
+$DeDupeOn = "Username", "Browser", "Platform"
+
+# Include or exclude the data headers in the $DataForReport array from your output file
 $IncludeOrExclude = "include"
 # Data headers for the final report
 # included or excluded base on $IncludeOrExclude
@@ -17,7 +16,9 @@ $DataForReport = "Username", "Browser", "Platform"
 $htUnique = @{ } # Empty hash table to store unique data
 $Start = Get-Date # Starting date/time for compare
 $n = 0 # counter
-$LastItemTime = $null # Clearing a var for subsqeuent runs
+$LastItemTime = $null # Clearing a var for subsequent runs
+$LastCount = $null
+$AllProgressData = @()
 
 foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
     
@@ -40,27 +41,29 @@ foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
 
     # Show progress time to the screen at $ShowCountEvery interval
     if ($n % $ShowCountEvery -eq 0) {
+        $UniqueCount = $htUnique.count
         if ($LastItemTime) {
-            $DeltaTime = [math]::Round($(New-TimeSpan $LastItemTime $(Get-Date))."Total$($DeltaUnit)", 2)
+            [string]$DeltaTime = $(New-TimeSpan $LastItemTime $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
         }
         else {
-            $DeltaTime = [math]::Round($(New-TimeSpan $Start $(Get-Date))."Total$($DeltaUnit)", 2)
+            [string]$DeltaTime = $(New-TimeSpan $Start $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
         }
 
-        $TotalTimeSpan = New-TimeSpan $Start $(Get-Date)
-        $SmallestTotalNonZero = (($TotalTimeSpan | Select-Object total*).psobject.properties | Where-Object { $_.MemberType -eq "NoteProperty" -and $_.value -ge 1 } | Sort-Object -Property value)[0]
-        $TotalSpanUnit = $SmallestTotalNonZero.name.Replace("Total", "")
-        $TotalSpanValue = [math]::Round($SmallestTotalNonZero.value, 2)
+        [string]$TotalTimeSpan = (New-TimeSpan $Start $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
         
-        [pscustomobject]@{
-            number                 = $n
-            "Delta ($DeltaUnit)"   = $DeltaTime
-            "Total Time (Dynamic)" = "$TotalSpanValue $TotalSpanUnit"
+        $ProgressData = [PSCustomObject]@{
+            "Processed rows"      = $n
+            "Unique rows [Delta]" = "$UniqueCount [$($UniqueCount-$LastCount)]"
+            "Total Time [Delta]"  = "$TotalTimeSpan [$DeltaTime]"
         }
+        $ProgressData 
+        $AllProgressData += $ProgressData
+        
+        $LastCount = $UniqueCount
         $LastItemTime = Get-Date
     }
 
-    # Conver the CSV data to a psObj using the header
+    # Convert the CSV data to a psObj using the header
     $psObjRow = $row | ConvertFrom-Csv -Header $arrHeader
     
     #region normalization
@@ -79,7 +82,7 @@ foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
 
     # Generate key and value pairs for hash table
     # Selecting item 1 of the CSV output just strips the header row
-    $key = $($psObjRow | Select-Object $DedupeOn | ConvertTo-Csv -NoTypeInformation)[1]
+    $key = $($psObjRow | Select-Object $DeDupeOn | ConvertTo-Csv -NoTypeInformation)[1]
     if ($IncludeOrExclude -eq "Include") { 
         $value = $($psObjRow | Select-Object $DataForReport | ConvertTo-Csv -NoTypeInformation)[1]
     }
@@ -87,7 +90,7 @@ foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
         $value = $($psObjRow | Select-Object * -ExcludeProperty $DataForReport | ConvertTo-Csv -NoTypeInformation)[1]
     }
     
-    # If the key doesn't alraedy exist, add it to the HT
+    # If the key doesn't already exist, add it to the HT
     if (!$htUnique[$key]) {
         $htUnique += @{$key = $value }
     }
