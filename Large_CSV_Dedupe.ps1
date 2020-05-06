@@ -2,7 +2,7 @@ $InputFile = "G:\temp\LoginHistory1588364791509.csv"
 $OutputFile = "G:\temp\LoginHistory1588364791509_Unique.csv"
 
 # How many rows should progress be printed
-$ShowCountEvery = 1000
+$ShowCountEvery = 10000
 
 $DeDupeOn = "Username", "Browser", "Platform"
 
@@ -10,7 +10,7 @@ $DeDupeOn = "Username", "Browser", "Platform"
 $IncludeOrExclude = "include"
 # Data headers for the final report
 # included or excluded base on $IncludeOrExclude
-$DataForReport = "Username", "Browser", "Platform"
+$DataForReport = "Username", "Browser", "Platform", "Login Type"
 
 # Some pre-loop vars
 $htUnique = @{ } # Empty hash table to store unique data
@@ -20,11 +20,15 @@ $LastItemTime = $null # Clearing a var for subsequent runs
 $LastCount = $null
 $AllProgressData = @()
 
+# Count total lines for progress %
+$ReadLinesBy = 100
+$TotalLines = (Get-Content $InputFile -read $ReadLinesBy | Measure-Object -line).lines * $ReadLinesBy
+
 foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
     
     # Grab the header row for processing data and export later
     if ($n -eq 0) {
-        $arrHeader = $row -split ","
+        $arrHeader = ($row).Replace("`"", "") -split ","
         
         if ($IncludeOrExclude -eq "Include") { 
             $csvHeader = ($arrHeader | Where-Object { $DataForReport -contains $_ }) -join ","
@@ -43,20 +47,20 @@ foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
     if ($n % $ShowCountEvery -eq 0) {
         $UniqueCount = $htUnique.count
         if ($LastItemTime) {
-            [string]$DeltaTime = $(New-TimeSpan $LastItemTime $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
+            $DeltaTime = $(New-TimeSpan $LastItemTime $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
         }
         else {
-            [string]$DeltaTime = $(New-TimeSpan $Start $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
+            $DeltaTime = $(New-TimeSpan $Start $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
         }
 
-        [string]$TotalTimeSpan = (New-TimeSpan $Start $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
+        $TotalTimeSpan = (New-TimeSpan $Start $(Get-Date)).ToString() -replace "(.*\.\d{2}).*", '$1'
         
         $ProgressData = [PSCustomObject]@{
-            "Processed rows"      = $n
+            "Processed rows [%]"  = "$n [$(($n/$TotalLines).ToString("P"))]"
             "Unique rows [Delta]" = "$UniqueCount [$($UniqueCount-$LastCount)]"
             "Total Time [Delta]"  = "$TotalTimeSpan [$DeltaTime]"
         }
-        $ProgressData 
+        Write-Output $ProgressData
         $AllProgressData += $ProgressData
         
         $LastCount = $UniqueCount
