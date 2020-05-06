@@ -22,6 +22,7 @@ $AllProgressData = @()
 
 # Count total lines for progress %
 $ReadLinesBy = 100
+write-output "Calculating total lines for percentage progress output"
 $TotalLines = (Get-Content $InputFile -read $ReadLinesBy | Measure-Object -line).lines * $ReadLinesBy
 
 foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
@@ -96,7 +97,7 @@ foreach ($row in [System.IO.File]::ReadLines($InputFile)) {
     
     # If the key doesn't already exist, add it to the HT
     if (!$htUnique[$key]) {
-        $htUnique += @{$key = $value }
+        $htUnique[$key] = $value
     }
 
 }
