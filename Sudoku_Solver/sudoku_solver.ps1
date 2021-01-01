@@ -22,30 +22,35 @@ function Get-SudokuPossibilities {
         $y # Row of target box
     )
     # Calculate the 3x3 box the number is in
-    $XBox = switch ($x) {
-        { 0..2 -contains $x } { 0..2 ; break }
-        { 3..5 -contains $x } { 3..5 ; break }
-        { 6..8 -contains $x } { 6..8 ; break }
+    $XBox = switch -Regex ($x) {
+        [0-2] { 0..2 ; break }
+        [3-5] { 3..5 ; break }
+        [6-8] { 6..8 ; break }
     }
-    $YBox = switch ($y) {
-        { 0..2 -contains $y } { 0..2 ; break }
-        { 3..5 -contains $y } { 3..5 ; break }
-        { 6..8 -contains $y } { 6..8 ; break }
+    $YBox = switch -Regex ($y) {
+        [0-2] { 0..2 ; break }
+        [3-5] { 3..5 ; break }
+        [6-8] { 6..8 ; break }
     }
     # See what numbers exist in the 3x3 box
-    $BoxNumbers = foreach ($RowNumber in $XBox) {
-        $grid[$RowNumber][$YBox]
+    $BoxNumbers = foreach ($Column in $XBox) {
+        $grid[$Column][$YBox]
     }
+
     # See what numbers exist in the column
     [array]$xNumbers = $grid[$x]
     
     # See what numbers exist in the row
     [array]$yNumbers = foreach ($Row in $Grid) {
-        $row[$y]
-    }
+        $Row[$y]
+    } 
 
     $NotPossible = ($xNumbers + $yNumbers + $BoxNumbers) # Numbers it can't be
-    $Possible = (1..9) | Where-Object { $NotPossible -notcontains $_ } # Possible numbers
+    $Possible = foreach ($Number in 1..9){ 
+        if($NotPossible -notcontains $Number){
+            $Number
+        }
+    }
     
     if ($Possible) {
         return $Possible # Return array of possible numbers
@@ -71,9 +76,17 @@ function Write-SudokuGrid {
 }
 
 function Get-SudokuSolution {
+    [cmdletbinding()]
     param(
-        $Grid = $Grid
+        $Grid = $Grid,
+        $Backtracks = 0,
+        $AttemptedPossibilities = 0,
+        $Zeros = $null,
+        $StartTime = (Get-Date)
     )
+    if (!$Zeros) {
+        $Zeros = ($Grid | ForEach-Object { $_ -eq 0 }).count    
+    }
     $Global:Solved = $false # To stop the recursive backlash later
     foreach ($Row in (0..8)) {
         foreach ($Column in (0..8)) {
@@ -82,9 +95,10 @@ function Get-SudokuSolution {
                 $Possible = Get-SudokuPossibilities $Row $Column
                 foreach ($Possibility in $Possible) { 
                     # Set the box to a possible value
+                    $AttemptedPossibilities ++
                     $Grid[$Row][$Column] = $Possibility
                     # Recursive call to continue attempting to solve unsolved boxes
-                    Get-SudokuSolution -Grid $Grid
+                    Get-SudokuSolution -Grid $Grid -Backtracks $Backtracks -AttemptedPossibilities $AttemptedPossibilities -Zeros $Zeros -StartTime $StartTime
                     if ($Solved) {
                         # If the puzzle has been solved don't continue the function
                         break
@@ -92,6 +106,7 @@ function Get-SudokuSolution {
                     else {
                         # If the puzzle hasn't been solved, and we're back, the solution didn't work
                         # Let's backtrack by zeroing out this box and trying another possibility
+                        $Backtracks ++
                         $Grid[$Row][$Column] = 0
                     }
                 }
@@ -100,10 +115,17 @@ function Get-SudokuSolution {
         }
     }
     $Global:Solved = $True # If we got here, the puzzle has been solved
+    Write-Output "Solved Puzzle:"
+    Write-SudokuGrid -Grid $Grid # Write the solved puzzle to the screen
+    $Output = [PSCustomObject]@{
+        "Boxes Solved"            = $Zeros
+        "Attempted Possibilities" = $AttemptedPossibilities
+        "Times Backtracked"       = $Backtracks
+        "Elapsed Solve Time"      = "$(New-TimeSpan $StartTime $(Get-Date))"
+    }
+    Write-Output $($Output | Format-Table)
 }
 
+Write-Output "Unsolved Puzzle:"
 Write-SudokuGrid -Grid $Grid # Write the unsolved puzzle to the screen
-$StartTime = Get-Date # Store the solve start time
-Get-SudokuSolution -Grid $Grid # Find a solution
-Write-SudokuGrid -Grid $Grid # Write the solved puzzle to the screen
-Write-Output "Solve Time: $(New-TimeSpan $StartTime $(Get-Date))" # Write the solve time
+Get-SudokuSolution -Grid $Grid -Verbose # Find a solution
