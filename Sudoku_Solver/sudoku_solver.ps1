@@ -2,17 +2,20 @@ param(
     $Grid = @(8, 1, 2, 7, 5, 3, 6, 0, 9, 0, 0, 3, 6, 0, 0, 0, 0, 0, 0, 7, 0, 0, 9, 0, 2, 0, 0, 0, 5, 0, 0, 0, 7, 0, 0, 0, 0, 0, 9, 0, 4, 5, 7, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0, 0, 6, 8, 0, 0, 8, 5, 0, 0, 0, 1, 0, 0, 9, 0, 0, 0, 0, 4, 0, 2)
 )
 
-# Transform grid array into actual 9x9 2-dimensional array 
-if ($Grid) {
+# Transform grid array into actual 9x9 2-dimensional array
+function ConvertTo-SudokuGrid {
+    param(
+        $GridArray
+    )
     $Row = 0
     $SudokuGrid = New-Object "System.Collections.ArrayList"
     do {
         $StartIndex = $Row * 9
-        $SudokuGrid.add( $Grid[$StartIndex..($StartIndex + 8)] ) | Out-Null
+        $SudokuGrid.add( $GridArray[$StartIndex..($StartIndex + 8)] ) | Out-Null
         $Row++
     }
     until($Row -gt 8)
-    $Grid = $SudokuGrid
+    return $SudokuGrid
 }
 
 # Function to find the possible values for a given box
@@ -46,8 +49,8 @@ function Get-SudokuPossibilities {
     } 
 
     $NotPossible = ($xNumbers + $yNumbers + $BoxNumbers) # Numbers it can't be
-    $Possible = foreach ($Number in 1..9){ 
-        if($NotPossible -notcontains $Number){
+    $Possible = foreach ($Number in 1..9) { 
+        if ($NotPossible -notcontains $Number) {
             $Number
         }
     }
@@ -67,10 +70,11 @@ function Write-SudokuGrid {
     )
     $y = 0
     foreach ($row in $grid) {
-        if (0 -eq $y ) { "┌───────┬───────┬───────┐" }
-        if (3, 6 -contains $y ) { '├───────┼───────┼───────┤' }
+        $Spacer = "───────"
+        if ($y -eq 0 ) { "┌$Spacer┬$Spacer┬$Spacer┐" }
+        if (3, 6 -contains $y ) { "├$Spacer┼$Spacer┼$Spacer┤" }
         @( ('│ ' + ($row[0..2] -join ' ')), ($row[3..5] -join ' '), (($row[6..8] -join ' ') + ' │') ) -join ' │ '
-        if ($y -eq 8 ) { '└───────┴───────┴───────┘' }
+        if ($y -eq 8 ) { "└$Spacer┴$Spacer┴$Spacer┘" }
         $y++
     }
 }
@@ -84,6 +88,9 @@ function Get-SudokuSolution {
         $Zeros = $null,
         $StartTime = (Get-Date)
     )
+    $Global:Backtracks = $Backtracks
+    $Global:AttemptedPossibilities = $AttemptedPossibilities
+
     if (!$Zeros) {
         $Zeros = ($Grid | ForEach-Object { $_ -eq 0 }).count    
     }
@@ -95,10 +102,10 @@ function Get-SudokuSolution {
                 $Possible = Get-SudokuPossibilities $Row $Column
                 foreach ($Possibility in $Possible) { 
                     # Set the box to a possible value
-                    $AttemptedPossibilities ++
+                    $Global:AttemptedPossibilities ++
                     $Grid[$Row][$Column] = $Possibility
                     # Recursive call to continue attempting to solve unsolved boxes
-                    Get-SudokuSolution -Grid $Grid -Backtracks $Backtracks -AttemptedPossibilities $AttemptedPossibilities -Zeros $Zeros -StartTime $StartTime
+                    Get-SudokuSolution -Grid $Grid -Backtracks $Global:Backtracks -AttemptedPossibilities $Global:AttemptedPossibilities -Zeros $Zeros -StartTime $StartTime
                     if ($Solved) {
                         # If the puzzle has been solved don't continue the function
                         break
@@ -106,7 +113,7 @@ function Get-SudokuSolution {
                     else {
                         # If the puzzle hasn't been solved, and we're back, the solution didn't work
                         # Let's backtrack by zeroing out this box and trying another possibility
-                        $Backtracks ++
+                        $Global:Backtracks ++
                         $Grid[$Row][$Column] = 0
                     }
                 }
@@ -126,6 +133,7 @@ function Get-SudokuSolution {
     Write-Output $($Output | Format-Table)
 }
 
+$Grid = ConvertTo-SudokuGrid -GridArray $Grid
 Write-Output "Unsolved Puzzle:"
 Write-SudokuGrid -Grid $Grid # Write the unsolved puzzle to the screen
-Get-SudokuSolution -Grid $Grid -Verbose # Find a solution
+Get-SudokuSolution -Grid $Grid # Find a solution
