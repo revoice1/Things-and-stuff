@@ -39,5 +39,5 @@ Solved Puzzle:
 
 Boxes Solved Attempted Possibilities Times Backtracked Elapsed Solve Time
 ------------ ----------------------- ----------------- ------------------
-          58                      70                12 00:00:02.2920244
+          58                    8969              8911 00:00:02.3119968
 ```
