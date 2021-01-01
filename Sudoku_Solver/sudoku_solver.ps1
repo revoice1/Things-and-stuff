@@ -64,11 +64,7 @@ function Write-SudokuGrid {
     foreach ($row in $grid) {
         if (0 -eq $y ) { "┌───────┬───────┬───────┐" }
         if (3, 6 -contains $y ) { '├───────┼───────┼───────┤' }
-        @(
-            '│ ' + $($row[0..2] -join ' ')
-            $row[3..5] -join ' '
-            ($row[6..8] -join ' ') + ' │' 
-        ) -join ' │ '
+        @( ('│ ' + ($row[0..2] -join ' ')), ($row[3..5] -join ' '), (($row[6..8] -join ' ') + ' │') ) -join ' │ '
         if ($y -eq 8 ) { '└───────┴───────┴───────┘' }
         $y++
     }
@@ -106,7 +102,7 @@ function Get-SudokuSolution {
     $Global:Solved = $True # If we got here, the puzzle has been solved
 }
 
-Write-SudokuGrid -Grid $Grid # Write the unsolved pussle to the screen
+Write-SudokuGrid -Grid $Grid # Write the unsolved puzzle to the screen
 $StartTime = Get-Date # Store the solve start time
 Get-SudokuSolution -Grid $Grid # Find a solution
 Write-SudokuGrid -Grid $Grid # Write the solved puzzle to the screen
