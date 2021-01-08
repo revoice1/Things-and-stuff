@@ -1,6 +1,8 @@
 Start-Transcript ".\newegg_parser.log"
 $DiscordWebhook = "https://discord.com/api/webhooks/THING AND STUFF GO HERE"
 
+$ReplayThresholdInMinutes = 60 # Threshold before an item can alert again
+
 $Pages = @(
     @{
         Label = "Ryzen 5000 Series:"
@@ -8,11 +10,17 @@ $Pages = @(
     }
     @{
         Label = "GeForce RTX 30 Series:"
-        URL   = "https://www.newegg.com/p/pl?N=100007709%20601357282%208000%204814&PageSize=96"
+        URL   = "https://www.newegg.com/p/pl?N=100007709%208000%204814%20601359415%20601357250%20601357247&PageSize=96"
     }
 )
 
-$AllInStockItems = @()
+try {
+    $PastInStockItems = Import-Clixml .\PastInStockItems.xml -ErrorAction stop
+}
+catch {
+    "Can't Import"
+    $PastInStockItems = @()
+}
 
 Foreach ($Page in $Pages) {
     Write-Output $Page["Label"]
@@ -40,16 +48,7 @@ Foreach ($Page in $Pages) {
         }
     }
 
-    try {
-        $PastInStockItems = Import-Clixml .\PastInStockItems.xml
-    }
-    catch {
-        $PastInStockItems = $null
-    }
-
     $InStockItems = $ItemTable | Where-Object { $_.InStock }
-    $AllInStockItems += $InStockItems
-
     $ItemsToAlert = $InStockItems | Where-Object { $PastInStockItems.link -notcontains $_.link }
 
     if ($ItemsToAlert) {
@@ -58,7 +57,7 @@ Foreach ($Page in $Pages) {
         foreach ($Item in $InStockItems) {
             $Embeds += @{
                 color       = 0xfa9d28
-                title       = "Newegg In Stock"
+                title       = "In Stock"
                 thumbnail   = @{
                     url       = $Item.Image
                     proxy_url = $Item.link
@@ -82,8 +81,14 @@ Foreach ($Page in $Pages) {
         Invoke-RestMethod -Uri $DiscordWebhook -Body $Body -Method Post -ContentType "application/json"
         
     }
-    else { "ALL OUT OF STOCK or ALREADY ALERTED"; "" }
+    else { "No Items To Alert!"; "" }
 }
 
-$AllInStockItems | Export-Clixml .\PastInStockItems.xml
+if ($ItemsToAlert) {
+    $PastInStockItems += $ItemsToAlert | Select-Object link, model, ShortName, @{N = "LastAlerted"; E = { Get-Date } }
+}
+
+$PastInStockItems | Where-Object { ([datetime]$_.LastAlerted).AddMinutes($ReplayThresholdInMinutes) -ge $(Get-Date) }  | Export-Clixml .\PastInStockItems.xml
+
+
 Stop-Transcript
