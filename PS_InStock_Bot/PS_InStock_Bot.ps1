@@ -1,4 +1,4 @@
-Start-Transcript ".\newegg_parser.log"
+Start-Transcript ".\PS_InStock_Bot.log"
 $DiscordWebhook = "URL TO YOUR GENERAL DISCORD WEBHOOK GOES HERE"
 
 $ReplayThresholdInMinutes = 60 # Threshold before an item can alert again
