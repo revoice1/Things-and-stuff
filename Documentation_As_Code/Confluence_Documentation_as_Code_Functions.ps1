@@ -27,14 +27,14 @@ function Get-ConfluencePageContent {
 
     $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
 
-    $PageAPIURL = "https://$($ConfluenceServerName)/rest/api/content/$($PageID)"
+    $PageAPIURL = "https://$($ConfluenceServerName)/wiki/rest/api/content/$($PageID)"
     $PageBodyStorageAPIURL = "$($PageAPIURL)?expand=body.storage,version"
 
     $GetPageDataSplat = @{
         Method          = "GET"
         UseBasicParsing = $True
         URI             = $PageBodyStorageAPIURL
-        Headers         = $AuthHeader
+        Headers         = $AuthHeader 
         ContentType     = 'application/json'
     }
 
@@ -74,6 +74,7 @@ function Publish-PSTableToConfluence {
     .Parameter Force
         Optional parameter to bypass the content check.
         If used the page will be updated regardless if the content is the same
+    .Parameter SkipHTMLConversion
     .EXAMPLE
         $PageID = "123454567"
         $ConfluenceServerName = "confluence.server.name"
@@ -95,12 +96,24 @@ function Publish-PSTableToConfluence {
         $Credential,
         [string]$SectionHeader,
         [switch]$IncludeFooter,
+        [switch]$AddTableOfContents,
+        [switch]$AddViewTracker,
         [string]$CustomFooterText,
-        [switch]$Force
+        [switch]$Force,
+        [switch]$SkipHTMLConversion
     )
 
-    $PSTableAsHTML = ($PSTable | ConvertTo-Html -Fragment) -join ""
-
+    if ( $SkipHTMLConversion) {
+        $PSTableAsHTML = $PSTable
+    }
+    else {
+        $PSTableAsHTML = ($PSTable | ConvertTo-Html -Fragment) -join ""
+        # If there are line breaks in the cells, replace them with HTML breaks for confluence to parse
+        if ($PSTableAsHTML -match "`n") {
+            $PSTableAsHTML = $PSTableAsHTML -replace "`n", "<br />"
+        }
+    }
+    
     $PageContent = Get-ConfluencePageContent -PageID $PageID -ConfluenceServerName $ConfluenceServerName -Credential $Credential -ErrorAction Stop
     $PageContentBodyStorageValue = $PageContent.body.storage.value
 
@@ -108,7 +121,7 @@ function Publish-PSTableToConfluence {
     $PageContentBodyStorageValueNoTags = $PageContentBodyStorageValue -replace "(<.*?>)"
 
     if ((!$Force) -and ($PageContentBodyStorageValueNoTags -match $PSTableAsHTMLNoTagsEscaped)) {
-        return Write-Output "Page:`"$($PageContent.title)`" is already up to date, no publishing necessary."
+        return Write-Output "Page:`"$($PageContent.title)`", Header: `"$SectionHeader`" - is already up to date, no publishing necessary."
     }
 
     if ($CustomFooterText) {
@@ -117,7 +130,6 @@ function Publish-PSTableToConfluence {
     else {
         $FooterText = "Content Updated by Automation"
     }
-
 
     if ($IncludeFooter) {
         $FooterData = "<p><sub><em>"
@@ -130,10 +142,18 @@ function Publish-PSTableToConfluence {
         $NewBody = $PageContentBodyStorageValue -replace "($($SectionHeader).+?)(<table.+?<\/table>(.*?$($FooterText).*?<\/em><\/sub><\/p>)?)", "`$1 $PSTableAsHTML"
     }
     else {
-        $NewBody = $PSTableAsHTML
+        if ($AddTableOfContents) {
+            $NewBody = "<ac:structured-macro ac:name=`"toc`" ac:schema-version=`"1`" ac:macro-id=`"590899dd-accd-4453-81a1-3e00e38a3e28`"><ac:parameter ac:name=`"maxLevel`">3</ac:parameter></ac:structured-macro>" + $PSTableAsHTML | Out-String
+        }
+        else {
+            $NewBody = $PSTableAsHTML
+        }
+        if ($AddViewTracker) {
+            $NewBody += "<p><br /></p><p><ac:structured-macro ac:name=`"viewtracker`" ac:schema-version=`"1`" ac:macro-id=`"84423050-f1fe-467c-88a6-2137392217ea`" /></p>"
+        }
     }
 
-    $PageAPIURL = "https://$($ConfluenceServerName)/rest/api/content/$($PageID)"
+    $PageAPIURL = "https://$($ConfluenceServerName)/wiki/rest/api/content/$($PageID)"
     $AuthHeader = ConvertTo-BasicAuthHeader -Credential $Credential
 
     $RequestBody = @{
@@ -161,6 +181,7 @@ function Publish-PSTableToConfluence {
 
     if ($PSCmdlet.ShouldProcess("$($PageContent.title)", "Update Content")) {
         try {
+            Write-Verbose "Updating Page:`"$($PageContent.title)`", Header: `"$SectionHeader`""
             Invoke-RestMethod @UpdatePageSplat
         }
         catch {
